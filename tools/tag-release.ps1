@@ -66,7 +66,7 @@ function Invoke-Git {
 # ---------------------------------------------------------------------------
 
 $repoRoot      = (Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '..')).Path
-$scriptFile    = Join-Path $repoRoot 'source' 'delphi-clean.ps1'
+$scriptFile    = Join-Path $repoRoot 'source' 'delphi-incver.ps1'
 $changelogFile = Join-Path $repoRoot 'CHANGELOG.md'
 $tag           = "v$Version"
 
