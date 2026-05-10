@@ -46,14 +46,15 @@ and the newer PowerShell 7+ (`pwsh`).
 
 ## Features
 
-- Increment version numbers in RC (VERSIONINFO) or text source files
-- Auto-detect target type from file extension (`.rc` -> RC, else Text)
-- Auto-detect version style from target (RC -> WinVer, else SemVer)
+- Increment version numbers in RC (VERSIONINFO), DProj, or text source files
+- Auto-detect target type from file extension (`.rc` -> RC, `.dproj` -> DProj, else Text)
+- Auto-detect version style from target (RC/DProj -> WinVer, else SemVer)
 - Bump any component: `major`, `minor`, `patch`, `build`, or `pre-release`
 - Default bump increments the last component of whatever width exists
 - Bumping a component zeros everything to its right
 - Preserves the original version width (never adds or removes components)
 - RC target updates all four VERSIONINFO locations in a single pass
+- DProj target updates `FileVersion` in all `VerInfo_Keys` elements
 - Text target uses a user-supplied regex pattern with a capture group
 - Structured JSON output via `-OutputFile` for tool integration
 
@@ -65,6 +66,7 @@ Path to the file containing the version to increment. Required.
 
 ```powershell
 delphi-incver -File src/versioninfo.rc
+delphi-incver -File src/MyApp.dproj
 delphi-incver -File source/mytool.ps1 -Pattern '\$script:ToolVersion\s*=\s*''([^'']+)'''
 ```
 
@@ -72,15 +74,18 @@ delphi-incver -File source/mytool.ps1 -Pattern '\$script:ToolVersion\s*=\s*''([^
 
 ## -Target
 
-File type: `RC` or `Text`. When omitted, auto-detected from the file extension.
+File type: `RC`, `DProj`, or `Text`. When omitted, auto-detected from the
+file extension.
 
 | Extension | Target |
 |-----------|--------|
 | `.rc`     | RC     |
+| `.dproj`  | DProj  |
 | anything else | Text |
 
 ```powershell
 delphi-incver -File version.rc -Target RC
+delphi-incver -File MyApp.dproj -Target DProj
 delphi-incver -File version.txt -Target Text -Pattern '(\d+\.\d+\.\d+)'
 ```
 
@@ -93,6 +98,7 @@ Version format: `WinVer` or `SemVer`. When omitted, auto-detected from the targe
 | Target | Default Style |
 |--------|---------------|
 | RC     | WinVer        |
+| DProj  | WinVer        |
 | Text   | SemVer        |
 
 ### WinVer
@@ -110,6 +116,7 @@ pre-release (`-alpha.1`) and build metadata (`+build.42`) suffixes.
 | Target | WinVer | SemVer |
 |--------|--------|--------|
 | RC     | Yes (default) | Error |
+| DProj  | Yes (default) | Error |
 | Text   | Yes    | Yes (default) |
 
 ```powershell
@@ -171,7 +178,7 @@ delphi-incver -File tool.ps1 -Pattern '...' -Part pre-release
 ## -Pattern
 
 Regex pattern with a capture group around the version string. **Required for
-Text targets.** Not used for RC targets.
+Text targets.** Not used for RC or DProj targets.
 
 The first capture group identifies the version substring to parse and replace.
 Everything outside the capture group is preserved as-is.
@@ -232,6 +239,30 @@ Supports 1 to 4 part versions. The part count is never changed.
 
 ---
 
+## DProj Target Behavior
+
+For `.dproj` files, `delphi-incver` updates the `FileVersion` value inside
+every `VerInfo_Keys` element across all `PropertyGroup` sections. This
+follows the same approach as the
+[Embarcadero blog post](https://blogs.embarcadero.com/change-dproj-file-and-product-version/)
+on programmatic .dproj version changes.
+
+- Reads the current version from `FileVersion=` in the first `VerInfo_Keys`
+- Increments it using WinVer logic
+- Writes the new `FileVersion=` to ALL `VerInfo_Keys` nodes
+- `ProductVersion` is left unchanged (it often follows a different lifecycle)
+- Discrete elements (`VerInfo_MajorVer`, `VerInfo_Build`, etc.) are left
+  alone -- the IDE resyncs them when the project is opened
+
+No `-Pattern` is needed for DProj targets.
+
+```powershell
+delphi-incver -File src/MyApp.dproj
+delphi-incver -File src/MyApp.dproj -Part minor
+```
+
+---
+
 ## Exit Codes
 
 ```text
@@ -257,6 +288,12 @@ Bump the minor version and zero patch/build:
 
 ```powershell
 delphi-incver -File src/versioninfo.rc -Part minor
+```
+
+Bump the FileVersion in a Delphi .dproj file:
+
+```powershell
+delphi-incver -File src/MyApp.dproj
 ```
 
 Bump a SemVer version in a PowerShell script:
