@@ -29,9 +29,10 @@ Increments a version number in an RC, DProj, or text file.
 Parses a version string from the target file, increments the specified
 component, and writes the updated version back to the file.
 
-For RC files, all four VERSIONINFO locations are updated:
-  FILEVERSION, PRODUCTVERSION (comma-separated)
-  VALUE "FileVersion", VALUE "ProductVersion" (dot-separated strings)
+For RC files, the two FileVersion locations are updated:
+  FILEVERSION (comma-separated)
+  VALUE "FileVersion" (dot-separated string)
+ProductVersion is left unchanged.
 
 For DProj files, the FileVersion value inside every VerInfo_Keys element
 is updated across all PropertyGroups. ProductVersion is left unchanged.

@@ -54,7 +54,7 @@ and the newer PowerShell 7+ (`pwsh`).
 - Default bump increments the last component of whatever width exists
 - Bumping a component zeros everything to its right
 - Preserves the original version width (never adds or removes components)
-- RC target updates all four VERSIONINFO locations in a single pass
+- RC target updates both FileVersion locations in a single pass
 - DProj target updates `FileVersion` in all `VerInfo_Keys` elements
 - Text target uses a user-supplied regex pattern with a capture group
 - Structured JSON output via `-OutputFile` for tool integration
@@ -226,14 +226,15 @@ delphi-incver -File ver.rc -OutputFile result.json
 
 ## RC Target Behavior
 
-For RC files, `delphi-incver` updates all four VERSIONINFO locations in a
-single pass:
+For RC files, `delphi-incver` updates both FileVersion locations in a
+single pass. ProductVersion is left unchanged (it often follows a
+different lifecycle).
 
 ```text
-FILEVERSION 1,2,3,4          ->  FILEVERSION 1,2,3,5
-PRODUCTVERSION 1,2,3,4       ->  PRODUCTVERSION 1,2,3,5
+FILEVERSION 1,2,3,4               ->  FILEVERSION 1,2,3,5
+PRODUCTVERSION 1,2,3,4            ->  (unchanged)
 VALUE "FileVersion", "1.2.3.4"    ->  VALUE "FileVersion", "1.2.3.5"
-VALUE "ProductVersion", "1.2.3.4" ->  VALUE "ProductVersion", "1.2.3.5"
+VALUE "ProductVersion", "1.2.3.4" ->  (unchanged)
 ```
 
 Supports 1 to 4 part versions. The part count is never changed.
@@ -327,16 +328,6 @@ Requires PowerShell 7+, Pester 5.7+, and PSScriptAnalyzer.
 
 ---
 
-## Maturity
-
-This repository is currently `incubator` and is under active development.
-It will graduate to `stable` once:
-
-- At least one downstream consumer exists.
-
-Until graduation, breaking changes may occur.
-
----
 
 ## Continuous-Delphi
 
