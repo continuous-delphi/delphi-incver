@@ -352,7 +352,7 @@ function Step-SemVerPreRelease {
 function Update-RcContent {
     <#
     .SYNOPSIS
-        Updates all VERSIONINFO locations in RC file content.
+        Updates FileVersion in VERSIONINFO block of RC file content (leaves ProductVersion unchanged).
         Returns a hashtable with Content (updated string) and OldVersion/NewVersion.
     #>
     param(
@@ -380,13 +380,11 @@ function Update-RcContent {
     $commaPattern = '\d+' + ('\s*,\s*\d+' * $commaCount)
     $dotPattern   = '\d+' + ('\.\d+' * $dotCount)
 
-    # Replace FILEVERSION and PRODUCTVERSION (comma-separated)
+    # Replace FILEVERSION (comma-separated) -- leave PRODUCTVERSION unchanged
     $Content = $Content -replace "(?m)^(\s*FILEVERSION\s+)${commaPattern}(\s*)$",    "`${1}${newCommaVer}`${2}"
-    $Content = $Content -replace "(?m)^(\s*PRODUCTVERSION\s+)${commaPattern}(\s*)$", "`${1}${newCommaVer}`${2}"
 
-    # Replace VALUE "FileVersion" and VALUE "ProductVersion" (dot-separated strings)
+    # Replace VALUE "FileVersion" (dot-separated string) -- leave VALUE "ProductVersion" unchanged
     $Content = $Content -replace "(VALUE\s+`"FileVersion`"\s*,\s*`")${dotPattern}",    "`${1}${newDotVer}"
-    $Content = $Content -replace "(VALUE\s+`"ProductVersion`"\s*,\s*`")${dotPattern}",  "`${1}${newDotVer}"
 
     return @{
         Content    = $Content

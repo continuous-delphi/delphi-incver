@@ -42,10 +42,10 @@ Describe 'delphi-incver -- RC target' {
             $content | Should -Match 'FILEVERSION 1,2,3,5'
         }
 
-        It 'updates PRODUCTVERSION in the file' {
+        It 'leaves PRODUCTVERSION unchanged' {
             & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
             $content = Get-Content -LiteralPath $script:TempFile -Raw
-            $content | Should -Match 'PRODUCTVERSION 1,2,3,5'
+            $content | Should -Match 'PRODUCTVERSION 1,2,3,4'
         }
 
         It 'updates VALUE "FileVersion" string in the file' {
@@ -54,10 +54,10 @@ Describe 'delphi-incver -- RC target' {
             $content | Should -Match 'VALUE "FileVersion", "1\.2\.3\.5'
         }
 
-        It 'updates VALUE "ProductVersion" string in the file' {
+        It 'leaves VALUE "ProductVersion" unchanged' {
             & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
             $content = Get-Content -LiteralPath $script:TempFile -Raw
-            $content | Should -Match 'VALUE "ProductVersion","1\.2\.3\.5'
+            $content | Should -Match 'VALUE "ProductVersion","1\.2\.3\.4'
         }
 
     }
