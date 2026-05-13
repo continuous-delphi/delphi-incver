@@ -6,6 +6,7 @@
 [![CI](https://github.com/continuous-delphi/delphi-incver/actions/workflows/ci.yml/badge.svg)](https://github.com/continuous-delphi/delphi-incver/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/continuous-delphi/delphi-incver?display_name=release)](https://github.com/continuous-delphi/delphi-incver/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/continuous-delphi/delphi-incver)
 [![Continuous Delphi](https://img.shields.io/badge/org-continuous--delphi-red)](https://github.com/continuous-delphi)
 
 PowerShell tool to increment version numbers in RC and Text source files, supporting `WinVer` and `SemVer` styles.
