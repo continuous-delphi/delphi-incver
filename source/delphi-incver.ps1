@@ -397,16 +397,17 @@ function Update-RcContent {
 function Update-TextContent {
     <#
     .SYNOPSIS
-        Uses a regex pattern with a capture group to find and replace a
-        version string in text file content.
+        Parses, increments, and replaces a version string in text file content
+        using a regex pattern with a capture group.
+        Returns a hashtable with Content (updated string) and OldVersion/NewVersion.
     #>
     param(
         [string]$Content,
         [string]$Pattern,
-        [string]$NewVersion
+        [string]$Style,
+        [string]$PartName
     )
 
-    # The pattern must have exactly one capture group for the version
     $regex = [regex]::new($Pattern)
     $match = $regex.Match($Content)
     if (-not $match.Success) {
@@ -417,14 +418,28 @@ function Update-TextContent {
     }
 
     $group = $match.Groups[1]
+    $oldVersionStr = $group.Value
+
+    # Parse and increment based on style
+    if ($Style -eq 'WinVer') {
+        $parts = ConvertFrom-WinVer $oldVersionStr
+        $newParts = Step-WinVer -Parts $parts -PartName $PartName
+        $newVersionStr = ConvertTo-WinVer -Parts $newParts -Separator '.'
+    }
+    else {
+        $parsed = ConvertFrom-SemVer $oldVersionStr
+        $bumped = Step-SemVer -Parsed $parsed -PartName $PartName
+        $newVersionStr = ConvertTo-SemVer $bumped
+    }
+
     $before = $Content.Substring(0, $group.Index)
     $after  = $Content.Substring($group.Index + $group.Length)
-    $updated = $before + $NewVersion + $after
+    $updated = $before + $newVersionStr + $after
 
     return @{
         Content    = $updated
-        OldVersion = $group.Value
-        NewVersion = $NewVersion
+        OldVersion = $oldVersionStr
+        NewVersion = $newVersionStr
     }
 }
 
@@ -597,53 +612,24 @@ try {
         exit $ExitSuccess
     }
     else {
-        # Text target -- use pattern to find and update version
-        # First extract the current version using the pattern
-        $regex = [regex]::new($Pattern)
-        $match = $regex.Match($content)
-        if (-not $match.Success) {
+        # Text target -- parse, increment, and replace version via pattern
+        $updateResult = Update-TextContent -Content $content -Pattern $Pattern -Style $resolvedStyle -PartName $Part
+        if ($null -eq $updateResult) {
             Write-Error "Pattern not found in $File" -ErrorAction Continue
             Write-Result @{ file = $File; error = "Pattern not found" }
             exit $ExitPatternNotFound
         }
-        if ($match.Groups.Count -lt 2) {
-            Write-Error "Pattern must contain at least one capture group for the version string." -ErrorAction Continue
-            exit $ExitInvalidArguments
-        }
-
-        $oldVersionStr = $match.Groups[1].Value
-
-        # Parse and increment based on style
-        if ($resolvedStyle -eq 'WinVer') {
-            $parts = ConvertFrom-WinVer $oldVersionStr
-            $newParts = Step-WinVer -Parts $parts -PartName $Part
-            $newVersionStr = ConvertTo-WinVer -Parts $newParts -Separator '.'
-        }
-        else {
-            # SemVer
-            $parsed = ConvertFrom-SemVer $oldVersionStr
-            $bumped = Step-SemVer -Parsed $parsed -PartName $Part
-            $newVersionStr = ConvertTo-SemVer $bumped
-        }
-
-        # Replace the version in the content using the capture group position
-        $updateResult = Update-TextContent -Content $content -Pattern $Pattern -NewVersion $newVersionStr
-        if ($null -eq $updateResult) {
-            Write-Error "Failed to update version in $File" -ErrorAction Continue
-            Write-Result @{ file = $File; error = "Update failed" }
-            exit $ExitPatternNotFound
-        }
 
         Set-Content -LiteralPath $File -Value $updateResult.Content -NoNewline -Encoding UTF8
-        Write-Host "$oldVersionStr -> $newVersionStr"
+        Write-Host "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
 
         Write-Result @{
             file       = $File
             target     = $resolvedTarget
             style      = $resolvedStyle
             part       = if ([string]::IsNullOrEmpty($Part)) { 'last' } else { $Part }
-            oldVersion = $oldVersionStr
-            newVersion = $newVersionStr
+            oldVersion = $updateResult.OldVersion
+            newVersion = $updateResult.NewVersion
         }
         exit $ExitSuccess
     }

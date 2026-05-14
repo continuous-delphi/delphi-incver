@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.0] 2026-05-13
+
+- RC target now updates only FileVersion; ProductVersion is left unchanged
+  (aligns with DProj target behavior)
+
 ## [0.2.0] 2026-05-09
 
-- initial release with `WinVer` and `SemVer` formats targeting `RC` and `Text` files
+- initial release with `WinVer` and `SemVer` formats targeting `RC`, `DProj`, and `Text` files
 
 <br />
 <br />
