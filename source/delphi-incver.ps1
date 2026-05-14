@@ -598,6 +598,7 @@ try {
             exit $ExitPatternNotFound
         }
 
+        # XmlDocument.Save writes UTF-8 with BOM, matching the Delphi IDE
         $updateResult.XmlDocument.Save($File)
         Write-Host "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
 
