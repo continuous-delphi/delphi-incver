@@ -128,6 +128,78 @@ Describe 'delphi-incver -- RC target' {
 
     }
 
+    Context '2-part RC version' {
+
+        BeforeEach {
+            $script:TempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).rc"
+            Copy-Item (Join-Path $script:FixturesPath 'versioninfo-2part.rc') $script:TempFile
+            $script:ResultFile = [System.IO.Path]::GetTempFileName()
+        }
+
+        AfterEach {
+            Remove-Item -LiteralPath $script:TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:ResultFile -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'default bumps last component (minor) from 7 to 8' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.oldVersion | Should -Be '3.7'
+            $result.newVersion | Should -Be '3.8'
+        }
+
+        It 'bumps major and zeros minor' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -Part major -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.newVersion | Should -Be '4.0'
+        }
+
+        It 'preserves 2-part format (does not add a 3rd component)' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $content = Get-Content -LiteralPath $script:TempFile -Raw
+            $content | Should -Match '(?m)FILEVERSION 3,8\s*$'
+        }
+
+        It 'explicit patch part on 2-part version exits non-zero' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -Part patch -OutputFile $script:ResultFile 2>$null
+            $LASTEXITCODE | Should -Not -Be 0
+        }
+
+    }
+
+    Context '1-part RC version' {
+
+        BeforeEach {
+            $script:TempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).rc"
+            Copy-Item (Join-Path $script:FixturesPath 'versioninfo-1part.rc') $script:TempFile
+            $script:ResultFile = [System.IO.Path]::GetTempFileName()
+        }
+
+        AfterEach {
+            Remove-Item -LiteralPath $script:TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:ResultFile -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'default bumps the sole component from 5 to 6' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.oldVersion | Should -Be '5'
+            $result.newVersion | Should -Be '6'
+        }
+
+        It 'preserves 1-part format (does not add a 2nd component)' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $content = Get-Content -LiteralPath $script:TempFile -Raw
+            $content | Should -Match '(?m)FILEVERSION 6\s*$'
+        }
+
+        It 'explicit minor part on 1-part version exits non-zero' {
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -Part minor -OutputFile $script:ResultFile 2>$null
+            $LASTEXITCODE | Should -Not -Be 0
+        }
+
+    }
+
     Context 'validation' {
 
         It 'exits with code 3 when file does not exist' {
