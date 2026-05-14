@@ -9,13 +9,13 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/continuous-delphi/delphi-incver)
 [![Continuous Delphi](https://img.shields.io/badge/org-continuous--delphi-red)](https://github.com/continuous-delphi)
 
-PowerShell tool to increment version numbers in RC and Text source files, supporting `WinVer` and `SemVer` styles.
+PowerShell tool to increment version numbers in .rc, .dproj and text source files, supporting `WinVer` and `SemVer` styles.
 
 ## Overview
 
 `delphi-incver` is a PowerShell utility that increments version numbers in
- `.RC` (VERSIONINFO) and text source files. It supports `WinVer`
-(numeric `N.N.N.N`) and `SemVer` ([semver.org](https://semver.org)) styles.
+ `.RC` (VERSIONINFO), `.dproj` (RAD Studio project files) and text source files.
+ It supports `WinVer` (numeric `N.N.N.N`) and `SemVer` ([semver.org](https://semver.org)) styles.
 
 Designed for use as a standalone command or as a bundled tool inside
 [delphi-powershell-ci](https://github.com/continuous-delphi/delphi-powershell-ci).
@@ -327,7 +327,6 @@ Requires PowerShell 7+, Pester 5.7+, and PSScriptAnalyzer.
 ```
 
 ---
-
 
 ## Continuous-Delphi
 
