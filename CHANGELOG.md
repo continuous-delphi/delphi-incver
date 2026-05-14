@@ -3,8 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.0.0] - 2026-05-14
 
-## [1.0.0] 2026-05-13
+- Support for `delphi-logger` added (opt-in structural logging for debug
+purposes.) [#6](https://github.com/continuous-delphi/delphi-incver/issues/6)
 
 - RC target now updates only FileVersion; ProductVersion is left unchanged
   (aligns with DProj target behavior)
