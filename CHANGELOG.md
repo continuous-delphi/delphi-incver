@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.1.0] - 2026-05-14
+
+- Added debug log tooling in /tools/delphi-logger
+
 ## [1.0.0] - 2026-05-14
 
 - Support for `delphi-logger` added (opt-in structural logging for debug
