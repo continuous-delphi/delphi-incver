@@ -6,6 +6,6 @@ Initialize-CDLogger -Source 'delphi-incver' -OutputMode Silent -MinimumLevel Tra
     -Target Text `
     -Style SemVer `
     -Part patch `
-    -Pattern "ToolVersion\s*=\s*'(\d+\.\d+\.\d+)'"
+    -Pattern '\$script:ToolVersion\s*=\s*''([^'']+)'''
 
 . "$PSScriptRoot\..\Write-CDDebugLog.ps1"

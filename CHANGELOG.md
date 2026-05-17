@@ -15,7 +15,7 @@ purposes.) [#6](https://github.com/continuous-delphi/delphi-incver/issues/6)
 - RC target now updates only FileVersion; ProductVersion is left unchanged
   (aligns with DProj target behavior)
 
-## [0.2.0] 2026-05-09
+## [0.2.0] - 2026-05-09
 
 - initial release with `WinVer` and `SemVer` formats targeting `RC`, `DProj`, and `Text` files
 

@@ -1,6 +1,6 @@
 # delphi-incver
 
-![delphi-clean logo](https://continuous-delphi.github.io/assets/logos/delphi-incver-480x270.png)
+![delphi-incver logo](https://continuous-delphi.github.io/assets/logos/delphi-incver-480x270.png)
 
 [![Delphi](https://img.shields.io/badge/delphi-red)](https://www.embarcadero.com/products/delphi)
 [![CI](https://github.com/continuous-delphi/delphi-incver/actions/workflows/ci.yml/badge.svg)](https://github.com/continuous-delphi/delphi-incver/actions/workflows/ci.yml)

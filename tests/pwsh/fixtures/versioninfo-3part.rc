@@ -11,7 +11,7 @@ BEGIN
   BEGIN
     BLOCK "080904B0"
     BEGIN
-      VALUE "FileDescription", TestApp\0"
+      VALUE "FileDescription", "TestApp\0"
       VALUE "FileVersion", "9.4.0\0"
       VALUE "InternalName", "TestInternal\0"
       VALUE "ProductName", "TestProduct\0"

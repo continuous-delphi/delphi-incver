@@ -3,7 +3,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Describe 'PSScriptAnalyzer tests \' {
+Describe 'PSScriptAnalyzer tests' {
 
   BeforeAll {
     # Verify PSScriptAnalyzer is available

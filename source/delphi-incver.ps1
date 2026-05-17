@@ -185,7 +185,7 @@ function Complete-CDActivity {
   )
   if (-not $script:LoggerAvailable) { return }
   $result = New-CDActivityResult `
-    -ToolVersion $ToolVersion `
+    -ToolVersion $script:ToolVersion `
     -Activity $Command `
     -ExitCode $ExitCode `
     -Message $Message
