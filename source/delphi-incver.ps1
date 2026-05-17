@@ -101,7 +101,7 @@ $ExitFileNotFound     = 3
 $ExitPatternNotFound  = 4
 $ExitIncrementFailed  = 5
 
-$script:ToolVersion = '1.1.0'
+$script:ToolVersion = '1.2.0'
 
 # BEGIN-CD-HOSTLOG
 # -----------------------------------------------------------------------------

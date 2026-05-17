@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.2.0] - 2026-05-17
+
+- Code tidy up, minor doc/script tweaks
+[#7](https://github.com/continuous-delphi/delphi-incver/issues/7)
+
 ## [1.1.0] - 2026-05-14
 
 - Added debug log tooling in /tools/delphi-logger
