@@ -101,97 +101,7 @@ $ExitFileNotFound     = 3
 $ExitPatternNotFound  = 4
 $ExitIncrementFailed  = 5
 
-$script:ToolVersion = '1.2.0'
-
-# BEGIN-CD-HOSTLOG
-# -----------------------------------------------------------------------------
-# Write-CDHostLog v0.1.0
-# Source: https://github.com/continuous-delphi/delphi-logger
-#
-# Universal output function for Continuous-Delphi PowerShell tooling.
-# Opt-in structured logging via ContinuousDelphi.Logger module.
-# See: https://github.com/continuous-delphi/delphi-logger/docs/output-modes.md
-# -----------------------------------------------------------------------------
-
-# Logger detection -- check once at load time whether the caller has loaded
-# ContinuousDelphi.Logger. If so, structured events are emitted alongside
-# native PowerShell stream output. If not, Write-CDHostLog routes to native
-# Write-Output / Write-Verbose / Write-Host / Write-Warning / Write-Error only.
-$script:LoggerAvailable = [bool](Get-Module -Name 'ContinuousDelphi.Logger')
-$script:LoggerCaptureOutput = if ($script:LoggerAvailable) {
-  $script:CDLoggerState = (Get-Module -Name 'ContinuousDelphi.Logger').SessionState.PSVariable.GetValue('CDLoggerState')
-  if ($null -ne $script:CDLoggerState) { $script:CDLoggerState.CaptureOutput } else { $false }
-} else { $false }
-
-function Write-CDHostLog {
-  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
-    Justification='Write-Host is used intentionally for Info/Success level output to stream 6 without polluting the pipeline')]
-  param(
-    [Parameter(Mandatory)]
-    $Message,
-
-    [ValidateSet('Output','Trace','Debug','Verbose','Info','Success','Warning','Error','Fatal')]
-    [string]$Level = 'Info',
-
-    [string]$EventId,
-    [hashtable]$Data,
-
-    [switch]$LogOnly
-  )
-
-  # Write to native PowerShell stream (unless LogOnly)
-  if (-not $LogOnly) {
-    switch ($Level) {
-      'Output' {
-        Write-Output $Message
-      }
-      { $_ -in 'Trace','Debug','Verbose' } {
-        Write-Verbose $Message
-      }
-      { $_ -in 'Info','Success' } {
-        Write-Host $Message
-      }
-      'Warning' {
-        Write-Warning $Message
-      }
-      { $_ -in 'Error','Fatal' } {
-        Write-Error $Message -ErrorAction Continue
-      }
-    }
-  }
-
-  # Also emit structured log event if logger available
-  if ($script:LoggerAvailable) {
-    $msgStr = [string]$Message
-    if ([string]::IsNullOrWhiteSpace($msgStr)) { return }
-    if ($Level -eq 'Output') {
-      if (-not $script:LoggerCaptureOutput) { return }
-      $logLevel = 'Info'
-    } else {
-      $logLevel = $Level
-    }
-    $params = @{ Level = $logLevel; Message = $msgStr }
-    if ($EventId) { $params.EventId = $EventId }
-    if ($Data)    { $params.Data = $Data }
-    Write-CDLogEvent @params
-  }
-}
-
-function Complete-CDActivity {
-  param(
-    [int]$ExitCode,
-    [string]$Command,
-    [string]$Message
-  )
-  if (-not $script:LoggerAvailable) { return }
-  $result = New-CDActivityResult `
-    -ToolVersion $script:ToolVersion `
-    -Activity $Command `
-    -ExitCode $ExitCode `
-    -Message $Message
-  Write-Information -MessageData $result -Tags @('CDLog', 'ActivityResult')
-}
-# END-CD-HOSTLOG
+$script:ToolVersion = '1.3.0'
 
 # -----------------------------------------------------------------------------
 # Version parsing and formatting
@@ -631,31 +541,26 @@ function Write-Result {
 try {
     # Validate file exists
     if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
-        Write-CDHostLog -Level Error -Message "File not found: $File" -EventId 'FILE-NOT-FOUND'
+        Write-Error "File not found: $File" -ErrorAction Continue
         Write-Result @{ file = $File; error = "File not found" }
-        Complete-CDActivity -ExitCode $ExitFileNotFound -Command 'incver' -Message "File not found: $File"
         exit $ExitFileNotFound
     }
 
     # Auto-detect target and style
     $resolvedTarget = Resolve-Target -FilePath $File -ExplicitTarget $Target
     $resolvedStyle  = Resolve-Style  -Target $resolvedTarget -ExplicitStyle $Style
-    Write-CDHostLog -Level Verbose -Message "File: $File, Target: $resolvedTarget, Style: $resolvedStyle, Part: $(if ($Part) { $Part } else { 'last' })"
 
     # Validate combinations
     if ($resolvedTarget -in @('RC', 'DProj') -and $resolvedStyle -eq 'SemVer') {
-        Write-CDHostLog -Level Error -Message "$resolvedTarget target does not support SemVer style." -EventId 'INVALID-ARGS'
-        Complete-CDActivity -ExitCode $ExitInvalidArguments -Command 'incver' -Message 'Invalid target/style combination'
+        Write-Error "$resolvedTarget target does not support SemVer style." -ErrorAction Continue
         exit $ExitInvalidArguments
     }
     if ($Part -eq 'pre-release' -and $resolvedStyle -ne 'SemVer') {
-        Write-CDHostLog -Level Error -Message "Part 'pre-release' is only valid with SemVer style." -EventId 'INVALID-ARGS'
-        Complete-CDActivity -ExitCode $ExitInvalidArguments -Command 'incver' -Message 'Invalid part/style combination'
+        Write-Error "Part 'pre-release' is only valid with SemVer style." -ErrorAction Continue
         exit $ExitInvalidArguments
     }
     if ($resolvedTarget -eq 'Text' -and [string]::IsNullOrEmpty($Pattern)) {
-        Write-CDHostLog -Level Error -Message "Text target requires a -Pattern parameter with a capture group." -EventId 'INVALID-ARGS'
-        Complete-CDActivity -ExitCode $ExitInvalidArguments -Command 'incver' -Message 'Missing pattern for Text target'
+        Write-Error "Text target requires a -Pattern parameter with a capture group." -ErrorAction Continue
         exit $ExitInvalidArguments
     }
 
@@ -666,14 +571,13 @@ try {
         # RC target -- update all VERSIONINFO locations
         $updateResult = Update-RcContent -Content $content -PartName $Part
         if ($null -eq $updateResult) {
-            Write-CDHostLog -Level Error -Message "No VERSIONINFO block found in $File" -EventId 'PATTERN-NOT-FOUND'
+            Write-Error "No VERSIONINFO block found in $File" -ErrorAction Continue
             Write-Result @{ file = $File; error = "VERSIONINFO not found" }
-            Complete-CDActivity -ExitCode $ExitPatternNotFound -Command 'incver' -Message 'VERSIONINFO not found'
             exit $ExitPatternNotFound
         }
 
         Set-Content -LiteralPath $File -Value $updateResult.Content -NoNewline -Encoding UTF8
-        Write-CDHostLog -Level Info -Message "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
+        Write-Host "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
 
         Write-Result @{
             file       = $File
@@ -683,22 +587,20 @@ try {
             oldVersion = $updateResult.OldVersion
             newVersion = $updateResult.NewVersion
         }
-        Complete-CDActivity -ExitCode $ExitSuccess -Command 'incver'
         exit $ExitSuccess
     }
     elseif ($resolvedTarget -eq 'DProj') {
         # DProj target -- update FileVersion in all VerInfo_Keys elements
         $updateResult = Update-DProjContent -FilePath $File -PartName $Part
         if ($null -eq $updateResult) {
-            Write-CDHostLog -Level Error -Message "No VerInfo_Keys with FileVersion found in $File" -EventId 'PATTERN-NOT-FOUND'
+            Write-Error "No VerInfo_Keys with FileVersion found in $File" -ErrorAction Continue
             Write-Result @{ file = $File; error = "VerInfo_Keys not found" }
-            Complete-CDActivity -ExitCode $ExitPatternNotFound -Command 'incver' -Message 'VerInfo_Keys not found'
             exit $ExitPatternNotFound
         }
 
         # XmlDocument.Save writes UTF-8 with BOM, matching the Delphi IDE
         $updateResult.XmlDocument.Save($File)
-        Write-CDHostLog -Level Info -Message "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
+        Write-Host "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
 
         Write-Result @{
             file       = $File
@@ -708,21 +610,19 @@ try {
             oldVersion = $updateResult.OldVersion
             newVersion = $updateResult.NewVersion
         }
-        Complete-CDActivity -ExitCode $ExitSuccess -Command 'incver'
         exit $ExitSuccess
     }
     else {
         # Text target -- parse, increment, and replace version via pattern
         $updateResult = Update-TextContent -Content $content -Pattern $Pattern -Style $resolvedStyle -PartName $Part
         if ($null -eq $updateResult) {
-            Write-CDHostLog -Level Error -Message "Pattern not found in $File" -EventId 'PATTERN-NOT-FOUND'
+            Write-Error "Pattern not found in $File" -ErrorAction Continue
             Write-Result @{ file = $File; error = "Pattern not found" }
-            Complete-CDActivity -ExitCode $ExitPatternNotFound -Command 'incver' -Message 'Pattern not found'
             exit $ExitPatternNotFound
         }
 
         Set-Content -LiteralPath $File -Value $updateResult.Content -NoNewline -Encoding UTF8
-        Write-CDHostLog -Level Info -Message "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
+        Write-Host "$($updateResult.OldVersion) -> $($updateResult.NewVersion)"
 
         Write-Result @{
             file       = $File
@@ -732,7 +632,6 @@ try {
             oldVersion = $updateResult.OldVersion
             newVersion = $updateResult.NewVersion
         }
-        Complete-CDActivity -ExitCode $ExitSuccess -Command 'incver'
         exit $ExitSuccess
     }
 }
@@ -741,10 +640,7 @@ catch {
     if ($_.Exception.Message -match 'Cannot increment') {
         $exitCode = $ExitIncrementFailed
     }
-    $errMsg = if ([string]::IsNullOrWhiteSpace($_.Exception.Message)) { $_.ToString() } else { $_.Exception.Message }
-    if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = 'Unknown error' }
-    Write-CDHostLog -Level Fatal -Message $errMsg -EventId 'UNEXPECTED-ERROR'
-    Write-Result @{ file = $File; error = $errMsg }
-    Complete-CDActivity -ExitCode $exitCode -Command 'incver' -Message $errMsg
+    Write-Error $_.Exception.Message -ErrorAction Continue
+    Write-Result @{ file = $File; error = $_.Exception.Message }
     exit $exitCode
 }

@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.3.0] - 2026-05-18
+- Reverted delphi-logger changes. Reconsidered - noise greater than value
+
 ## [1.2.0] - 2026-05-17
 
 - Code tidy up, minor doc/script tweaks
