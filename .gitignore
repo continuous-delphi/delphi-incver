@@ -1,3 +1,7 @@
 # PowerShell test output
 tests/pwsh/results/*.xml
 *.md
+
+# Session working documents (not project artifacts)
+tools/commit*.bat
+Ticket8-note.txt

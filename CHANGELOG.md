@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.4.0] - 2026-07-13
+
+- DProj target now keeps the discrete `VerInfo_MajorVer`/`MinorVer`/`Release`/`Build`
+  elements in sync with the `FileVersion` key (update where present, create where
+  absent) so the RAD Studio Version Info dialog can no longer silently revert a
+  bump on Save. Edits preserve the file's BOM, line endings, and indentation.
+[#8](https://github.com/continuous-delphi/delphi-incver/issues/8)
+
 ## [1.3.0] - 2026-05-18
 - Reverted delphi-logger changes. Reconsidered - noise greater than value
 

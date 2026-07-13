@@ -165,4 +165,202 @@ Describe 'delphi-incver -- DProj target' {
 
     }
 
+    # -------------------------------------------------------------------------
+    # Issue #8: discrete VerInfo_* elements must be kept in sync with the
+    # FileVersion key so the RAD Studio Version Info dialog cannot silently
+    # revert a bump on Save.
+    # -------------------------------------------------------------------------
+    Context 'discrete VerInfo sync (issue #8)' {
+
+        BeforeEach {
+            $script:TempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).dproj"
+            Copy-Item (Join-Path $script:FixturesPath 'mismatch-project.dproj') $script:TempFile
+            $script:ResultFile = [System.IO.Path]::GetTempFileName()
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $script:Xml = [xml](Get-Content -LiteralPath $script:TempFile -Raw)
+            $script:Ns = [System.Xml.XmlNamespaceManager]::new($script:Xml.NameTable)
+            $script:Ns.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
+            $script:Raw = Get-Content -LiteralPath $script:TempFile -Raw
+        }
+
+        AfterEach {
+            Remove-Item -LiteralPath $script:TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:ResultFile -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'updates FileVersion in every VerInfo_Keys node' {
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_Keys', $script:Ns)) {
+                $n.InnerText | Should -Match 'FileVersion=1\.2\.3\.5'
+            }
+        }
+
+        It 'leaves ProductVersion unchanged in every VerInfo_Keys node' {
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_Keys', $script:Ns)) {
+                $n.InnerText | Should -Match 'ProductVersion=9\.0\.0\.0'
+            }
+        }
+
+        It 'sets every discrete element to the bumped four-part version' {
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_MajorVer', $script:Ns)) { $n.InnerText | Should -Be '1' }
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_MinorVer', $script:Ns)) { $n.InnerText | Should -Be '2' }
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_Release',  $script:Ns)) { $n.InnerText | Should -Be '3' }
+            foreach ($n in $script:Xml.SelectNodes('//ms:VerInfo_Build',    $script:Ns)) { $n.InnerText | Should -Be '5' }
+        }
+
+        It 'creates the four discrete elements in the group that lacked them' {
+            # Both keyed PropertyGroups must now carry each discrete element.
+            $script:Xml.SelectNodes('//ms:VerInfo_MajorVer', $script:Ns).Count | Should -Be 2
+            $script:Xml.SelectNodes('//ms:VerInfo_MinorVer', $script:Ns).Count | Should -Be 2
+            $script:Xml.SelectNodes('//ms:VerInfo_Release',  $script:Ns).Count | Should -Be 2
+            $script:Xml.SelectNodes('//ms:VerInfo_Build',    $script:Ns).Count | Should -Be 2
+        }
+
+        It 'inserts created discrete elements in alphabetical order (matches IDE serialization)' {
+            $cfg = $script:Raw.Substring($script:Raw.IndexOf('Cfg_2_Win32'))
+            $order = 'VerInfo_Build', 'VerInfo_IncludeVerInfo', 'VerInfo_Keys', 'VerInfo_Locale', 'VerInfo_MajorVer', 'VerInfo_MinorVer', 'VerInfo_Release'
+            $positions = $order | ForEach-Object { $cfg.IndexOf("<$_>") }
+            foreach ($p in $positions) { $p | Should -BeGreaterThan (-1) }
+            $sorted = $positions | Sort-Object
+            "$positions" | Should -Be "$sorted"
+        }
+
+        It 'does not add discrete elements to a PropertyGroup that has no VerInfo_Keys' {
+            $noKeys = $script:Xml.SelectSingleNode('//ms:PropertyGroup[ms:ProjectGuid]', $script:Ns)
+            $noKeys.SelectNodes('ms:VerInfo_MajorVer', $script:Ns).Count | Should -Be 0
+        }
+
+        It 'reports discreteVersion in the JSON output' {
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.newVersion      | Should -Be '1.2.3.5'
+            $result.discreteVersion | Should -Be '1.2.3.5'
+        }
+
+    }
+
+    Context 'discrete sync -- version widths and explicit parts' {
+
+        BeforeEach {
+            $script:TempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).dproj"
+            $script:ResultFile = [System.IO.Path]::GetTempFileName()
+        }
+
+        AfterEach {
+            Remove-Item -LiteralPath $script:TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:ResultFile -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'zero-pads discrete elements to four values regardless of key width' -ForEach @(
+            @{ Ver = '1.2.4'; NewStr = '1.2.5'; Disc = '1.2.5.0' }
+            @{ Ver = '1.3';   NewStr = '1.4';   Disc = '1.4.0.0' }
+            @{ Ver = '7';     NewStr = '8';     Disc = '8.0.0.0' }
+        ) {
+            $content = @"
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <VerInfo_Keys>FileVersion=$Ver;ProductVersion=9.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+</Project>
+"@
+            Set-Content -LiteralPath $script:TempFile -Value $content -NoNewline
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.newVersion      | Should -Be $NewStr
+            $result.discreteVersion | Should -Be $Disc
+
+            $xml = [xml](Get-Content -LiteralPath $script:TempFile -Raw)
+            $ns = [System.Xml.XmlNamespaceManager]::new($xml.NameTable)
+            $ns.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
+            # FileVersion string keeps its original width
+            $xml.SelectSingleNode('//ms:VerInfo_Keys', $ns).InnerText | Should -Match "FileVersion=$([regex]::Escape($NewStr));"
+            # discrete elements are the four zero-padded values
+            $expected = $Disc -split '\.'
+            $xml.SelectSingleNode('//ms:VerInfo_MajorVer', $ns).InnerText | Should -Be $expected[0]
+            $xml.SelectSingleNode('//ms:VerInfo_MinorVer', $ns).InnerText | Should -Be $expected[1]
+            $xml.SelectSingleNode('//ms:VerInfo_Release',  $ns).InnerText | Should -Be $expected[2]
+            $xml.SelectSingleNode('//ms:VerInfo_Build',    $ns).InnerText | Should -Be $expected[3]
+        }
+
+        It 'flows zeroing through to discrete elements on -Part minor' {
+            $content = @"
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <VerInfo_Keys>FileVersion=1.2.3.4;ProductVersion=9.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+</Project>
+"@
+            Set-Content -LiteralPath $script:TempFile -Value $content -NoNewline
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -Part minor -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.newVersion      | Should -Be '1.3.0.0'
+            $result.discreteVersion | Should -Be '1.3.0.0'
+        }
+
+    }
+
+    Context 'discrete sync -- file fidelity' {
+
+        It 'preserves BOM, CRLF line endings, and indentation' {
+            $tempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).dproj"
+            $lines = @(
+                '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+                '    <PropertyGroup>'
+                '        <VerInfo_Keys>FileVersion=1.2.3.4;ProductVersion=9.0.0.0</VerInfo_Keys>'
+                '        <VerInfo_Locale>1033</VerInfo_Locale>'
+                '    </PropertyGroup>'
+                '</Project>'
+            )
+            $text = ($lines -join "`r`n") + "`r`n"
+            [System.IO.File]::WriteAllText($tempFile, $text, [System.Text.UTF8Encoding]::new($true))
+            try {
+                & pwsh -NoProfile -File $script:ScriptPath -File $tempFile 2>$null
+                $LASTEXITCODE | Should -Be 0
+
+                $bytes = [System.IO.File]::ReadAllBytes($tempFile)
+                # BOM preserved
+                $bytes[0] | Should -Be 0xEF
+                $bytes[1] | Should -Be 0xBB
+                $bytes[2] | Should -Be 0xBF
+
+                $after = [System.IO.File]::ReadAllText($tempFile)
+                # every LF is part of a CRLF (no lone LF introduced, no CRLF stripped)
+                ([regex]::Matches($after, "`n")).Count | Should -Be ([regex]::Matches($after, "`r`n")).Count
+                # indentation not reflowed: untouched line byte-identical, groups at 4 spaces
+                $after | Should -Match '        <VerInfo_Locale>1033</VerInfo_Locale>'
+                $after | Should -Match '(?m)^    <PropertyGroup>'
+                # the bump did land
+                $after | Should -Match 'FileVersion=1\.2\.3\.5'
+            }
+            finally {
+                Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+    }
+
+    Context 'discrete sync -- error handling' {
+
+        It 'fails and leaves the file unmodified when a discrete element is non-numeric' {
+            $tempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).dproj"
+            $content = @"
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <VerInfo_Keys>FileVersion=1.2.3.4;ProductVersion=9.0.0.0</VerInfo_Keys>
+        <VerInfo_Build>abc</VerInfo_Build>
+    </PropertyGroup>
+</Project>
+"@
+            Set-Content -LiteralPath $tempFile -Value $content -NoNewline
+            $before = Get-Content -LiteralPath $tempFile -Raw
+            try {
+                & pwsh -NoProfile -File $script:ScriptPath -File $tempFile 2>$null
+                $LASTEXITCODE | Should -Not -Be 0
+                (Get-Content -LiteralPath $tempFile -Raw) | Should -BeExactly $before
+            }
+            finally {
+                Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+    }
+
 }

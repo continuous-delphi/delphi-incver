@@ -222,6 +222,10 @@ Path to write a structured JSON result file. Used for tool integration
 delphi-incver -File ver.rc -OutputFile result.json
 ```
 
+DProj results add a `discreteVersion` field recording the four-part value
+written to the discrete `VerInfo_*` elements (for example `"1.2.5.0"` when the
+`FileVersion` key was bumped to `1.2.5`).
+
 ---
 
 ## RC Target Behavior
@@ -253,8 +257,23 @@ on programmatic .dproj version changes.
 - Increments it using WinVer logic
 - Writes the new `FileVersion=` to ALL `VerInfo_Keys` nodes
 - `ProductVersion` is left unchanged (it often follows a different lifecycle)
-- Discrete elements (`VerInfo_MajorVer`, `VerInfo_Build`, etc.) are left
-  alone -- the IDE resyncs them when the project is opened
+- Keeps the discrete `VerInfo_MajorVer`, `VerInfo_MinorVer`, `VerInfo_Release`,
+  and `VerInfo_Build` elements in sync with the new version -- updating them
+  where present and creating them where absent, in every `PropertyGroup` that
+  carries a `FileVersion` key
+
+A `.dproj` stores the file version twice, and two different consumers read
+different copies: builds read the `FileVersion` key, while the RAD Studio
+*Version Info* options page reads the discrete elements and writes its state
+back into **both** representations when you click Save. If only the key were
+bumped, the next developer to open Project Options and save would silently
+revert the version. Writing both keeps them from ever disagreeing. The
+`FileVersion` string keeps its original width (it is never widened); the
+discrete elements are always the four zero-padded components.
+
+Edits are applied as targeted text replacements, so the file is byte-identical
+apart from the changed values and any inserted elements -- the BOM, line
+endings, and indentation are preserved.
 
 No `-Pattern` is needed for DProj targets.
 
