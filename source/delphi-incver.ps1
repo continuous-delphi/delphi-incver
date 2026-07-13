@@ -101,7 +101,7 @@ $ExitFileNotFound     = 3
 $ExitPatternNotFound  = 4
 $ExitIncrementFailed  = 5
 
-$script:ToolVersion = '1.4.1'
+$script:ToolVersion = '1.5.1'
 
 # -----------------------------------------------------------------------------
 # Version parsing and formatting
@@ -457,6 +457,13 @@ function Update-DProjContent {
         silent reversion the next time a developer opens Project Options and saves.
         Keeping both in sync closes that gap (see issue #8).
 
+        The baseline version is the MAXIMUM FileVersion across all VerInfo_Keys
+        nodes (component-wise numeric, missing components treated as zero; ties
+        resolved to the last in document order). This avoids reading the Base
+        group's 1.0.0.0 placeholder and regressing the effective version that lives
+        in a more-derived config group (see issue #9). The bumped value is written
+        to every VerInfo_Keys node, so a bump never decreases any FileVersion entry.
+
         Edits are applied as targeted string replacements so the file is preserved
         byte-for-byte apart from the owned values and inserted elements -- the BOM,
         line endings, indentation, and all other content are left untouched. (A DOM
@@ -472,20 +479,61 @@ function Update-DProjContent {
         [string]$PartName
     )
 
-    # Read current FileVersion from the first VerInfo_Keys node
+    # Collect every FileVersion across all VerInfo_Keys nodes (document order).
     $keysMatches = [regex]::Matches($Content, '<VerInfo_Keys>(.*?)</VerInfo_Keys>', [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    if ($keysMatches.Count -eq 0) {
-        return $null
-    }
-    $oldVersionStr = $null
+    $versionStrings = @()
     foreach ($km in $keysMatches) {
         if ($km.Groups[1].Value -match 'FileVersion=([^;<]+)') {
-            $oldVersionStr = $Matches[1]
-            break
+            $versionStrings += $Matches[1]
         }
     }
-    if ([string]::IsNullOrEmpty($oldVersionStr)) {
+    if ($versionStrings.Count -eq 0) {
         return $null
+    }
+
+    # Select the baseline as the MAXIMUM FileVersion. Comparison is component-wise
+    # numeric with missing components treated as zero; on ties, the last value in
+    # document order wins so the retained width matches the most-derived group.
+    # This prevents the Base group's 1.0.0.0 placeholder from being chosen and
+    # regressing the effective version (issue #9). Every FileVersion must parse --
+    # a bad value fails here (before any write) rather than being skipped.
+    $baselineStr = $null
+    $baselinePad = $null
+    foreach ($vs in $versionStrings) {
+        try {
+            $parts = ConvertFrom-WinVer $vs
+        }
+        catch {
+            throw "Unparsable FileVersion '$vs' in '$FilePath'. $($_.Exception.Message)"
+        }
+        $pad = @(0, 0, 0, 0)
+        for ($i = 0; $i -lt $parts.Count -and $i -lt 4; $i++) { $pad[$i] = $parts[$i] }
+
+        if ($null -eq $baselinePad) {
+            $baselineStr = $vs
+            $baselinePad = $pad
+            continue
+        }
+        # $atLeast is true when $pad >= $baselinePad, so an equal value (tie) also
+        # replaces the baseline and the last in document order is retained.
+        $atLeast = $true
+        for ($i = 0; $i -lt 4; $i++) {
+            if ($pad[$i] -gt $baselinePad[$i]) { $atLeast = $true; break }
+            if ($pad[$i] -lt $baselinePad[$i]) { $atLeast = $false; break }
+        }
+        if ($atLeast) {
+            $baselineStr = $vs
+            $baselinePad = $pad
+        }
+    }
+    $oldVersionStr = $baselineStr
+
+    # When the keys disagree, surface which distinct values were seen and which was
+    # chosen. Informational only (never fails); visible on the console by default.
+    $distinctCount = ($versionStrings | Select-Object -Unique | Measure-Object).Count
+    if ($distinctCount -gt 1) {
+        $summary = ($versionStrings | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Name) (x$($_.Count))" }) -join ', '
+        Write-Host "Multiple FileVersion values found: $summary. Using baseline $baselineStr."
     }
 
     # Parse and increment (the FileVersion string keeps its original width)

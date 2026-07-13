@@ -4,4 +4,7 @@ tests/pwsh/results/*.xml
 
 # Session working documents (not project artifacts)
 tools/commit*.bat
-Ticket8-note.txt
+Ticket*-note.txt
+
+# Local scratch probe project (not a test fixture)
+VerProbe.dproj

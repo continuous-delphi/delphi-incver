@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 ---
+## [1.5.0] - 2026-07-13
+
+- DProj target now selects the baseline as the maximum `FileVersion` across all
+  `VerInfo_Keys` nodes instead of the first in document order, so the Base
+  group's `1.0.0.0` placeholder can no longer regress the effective version. A
+  bump never decreases any `FileVersion` entry; mismatched keys emit an
+  informational notice.
+[#9](https://github.com/continuous-delphi/delphi-incver/issues/9)
+
 ## [1.4.0] - 2026-07-13
 
 - DProj target now keeps the discrete `VerInfo_MajorVer`/`MinorVer`/`Release`/`Build`

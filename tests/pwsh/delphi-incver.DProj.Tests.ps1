@@ -29,11 +29,14 @@ Describe 'delphi-incver -- DProj target' {
             $LASTEXITCODE | Should -Be 0
         }
 
-        It 'increments the build number (last part) in the first VerInfo_Keys' {
+        # sample-project.dproj carries distinct keys (Base 1.2.3.4, derived
+        # 1.2.3.244); the baseline is the maximum across keys (1.2.3.244), not the
+        # first in document order (issue #9).
+        It 'increments the maximum baseline across VerInfo_Keys nodes' {
             & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
             $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
-            $result.oldVersion | Should -Be '1.2.3.4'
-            $result.newVersion | Should -Be '1.2.3.5'
+            $result.oldVersion | Should -Be '1.2.3.244'
+            $result.newVersion | Should -Be '1.2.3.245'
         }
 
         It 'updates FileVersion in the Base VerInfo_Keys' {
@@ -42,7 +45,7 @@ Describe 'delphi-incver -- DProj target' {
             $nsMgr = [System.Xml.XmlNamespaceManager]::new($xml.NameTable)
             $nsMgr.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
             $baseKeys = $xml.SelectNodes('//ms:VerInfo_Keys', $nsMgr)[0].InnerText
-            $baseKeys | Should -Match 'FileVersion=1\.2\.3\.5'
+            $baseKeys | Should -Match 'FileVersion=1\.2\.3\.245'
         }
 
         It 'updates FileVersion in ALL VerInfo_Keys nodes' {
@@ -52,7 +55,7 @@ Describe 'delphi-incver -- DProj target' {
             $nsMgr.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
             $nodes = $xml.SelectNodes('//ms:VerInfo_Keys', $nsMgr)
             foreach ($node in $nodes) {
-                $node.InnerText | Should -Match 'FileVersion=1\.2\.3\.5'
+                $node.InnerText | Should -Match 'FileVersion=1\.2\.3\.245'
             }
         }
 
@@ -359,6 +362,110 @@ Describe 'delphi-incver -- DProj target' {
             finally {
                 Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
             }
+        }
+
+    }
+
+    # -------------------------------------------------------------------------
+    # Issue #9: the baseline is the maximum FileVersion across all VerInfo_Keys
+    # nodes, not the first in document order -- so the Base group's 1.0.0.0
+    # placeholder can no longer regress the effective version.
+    # -------------------------------------------------------------------------
+    Context 'baseline selection -- max across keys (issue #9)' {
+
+        BeforeEach {
+            $script:TempFile = Join-Path ([System.IO.Path]::GetTempPath()) "incver-test-$([guid]::NewGuid()).dproj"
+            $script:ResultFile = [System.IO.Path]::GetTempFileName()
+        }
+
+        AfterEach {
+            Remove-Item -LiteralPath $script:TempFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:ResultFile -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'bumps the derived version, not the Base placeholder' {
+            Copy-Item (Join-Path $script:FixturesPath 'placeholder-project.dproj') $script:TempFile
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.oldVersion | Should -Be '1.2.3.4'
+            $result.newVersion | Should -Be '1.2.3.5'
+
+            $raw = Get-Content -LiteralPath $script:TempFile -Raw
+            # every key unified to the bumped baseline; the placeholder never wins
+            [regex]::Matches($raw, 'FileVersion=1\.2\.3\.5(?![\d.])').Count | Should -Be 2
+            $raw | Should -Not -Match 'FileVersion=1\.0\.0\.1'
+        }
+
+        It 'emits an informational notice naming the distinct values and the chosen baseline' {
+            Copy-Item (Join-Path $script:FixturesPath 'placeholder-project.dproj') $script:TempFile
+            $out = (& pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile 2>$null) -join "`n"
+            $out | Should -Match 'Multiple FileVersion values found'
+            $out | Should -Match '1\.0\.0\.0'
+            $out | Should -Match '1\.2\.3\.4'
+            $out | Should -Match 'baseline 1\.2\.3\.4'
+        }
+
+        It 'bumps uniform keys and emits no mismatch notice' {
+            Copy-Item (Join-Path $script:FixturesPath 'uniform-project.dproj') $script:TempFile
+            $out = (& pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null) -join "`n"
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.oldVersion | Should -Be '2.1.0.0'
+            $result.newVersion | Should -Be '2.1.0.1'
+
+            $raw = Get-Content -LiteralPath $script:TempFile -Raw
+            [regex]::Matches($raw, 'FileVersion=2\.1\.0\.1').Count | Should -Be 2
+            $out | Should -Not -Match 'Multiple FileVersion values found'
+        }
+
+        It 'compares with zero-padding and unifies keys to the baseline width' {
+            # baseline is 1.2.3 (> 1.0.0.0 padded); the 4-part placeholder key is
+            # narrowed to the 3-part baseline when all keys are unified.
+            $content = @"
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup Condition="'`$(Base_Win32)'!=''">
+        <VerInfo_Keys>FileVersion=1.0.0.0;ProductVersion=1.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'`$(Cfg_1_Win32)'!=''">
+        <VerInfo_Keys>FileVersion=1.2.3;ProductVersion=9.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+</Project>
+"@
+            Set-Content -LiteralPath $script:TempFile -Value $content -NoNewline
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.oldVersion | Should -Be '1.2.3'
+            $result.newVersion | Should -Be '1.2.4'
+
+            $raw = Get-Content -LiteralPath $script:TempFile -Raw
+            [regex]::Matches($raw, 'FileVersion=1\.2\.4(?![\d.])').Count | Should -Be 2
+        }
+
+        It 'applies -Part to the derived baseline' {
+            Copy-Item (Join-Path $script:FixturesPath 'placeholder-project.dproj') $script:TempFile
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile -Part minor -OutputFile $script:ResultFile 2>$null
+            $result = Get-Content -LiteralPath $script:ResultFile -Raw | ConvertFrom-Json
+            $result.newVersion | Should -Be '1.3.0.0'
+
+            $raw = Get-Content -LiteralPath $script:TempFile -Raw
+            [regex]::Matches($raw, 'FileVersion=1\.3\.0\.0').Count | Should -Be 2
+        }
+
+        It 'fails and leaves the file unmodified when a FileVersion cannot be parsed' {
+            $content = @"
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup Condition="'`$(Base_Win32)'!=''">
+        <VerInfo_Keys>FileVersion=banana;ProductVersion=1.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'`$(Cfg_1_Win32)'!=''">
+        <VerInfo_Keys>FileVersion=1.2.3.4;ProductVersion=9.0.0.0</VerInfo_Keys>
+    </PropertyGroup>
+</Project>
+"@
+            Set-Content -LiteralPath $script:TempFile -Value $content -NoNewline
+            $before = Get-Content -LiteralPath $script:TempFile -Raw
+            & pwsh -NoProfile -File $script:ScriptPath -File $script:TempFile 2>$null
+            $LASTEXITCODE | Should -Not -Be 0
+            (Get-Content -LiteralPath $script:TempFile -Raw) | Should -BeExactly $before
         }
 
     }

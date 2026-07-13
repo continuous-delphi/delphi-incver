@@ -253,7 +253,9 @@ follows the same approach as the
 [Embarcadero blog post](https://blogs.embarcadero.com/change-dproj-file-and-product-version/)
 on programmatic .dproj version changes.
 
-- Reads the current version from `FileVersion=` in the first `VerInfo_Keys`
+- Selects the baseline as the **maximum** `FileVersion=` across all
+  `VerInfo_Keys` nodes (component-wise numeric, missing components treated as
+  zero; ties resolve to the last in document order)
 - Increments it using WinVer logic
 - Writes the new `FileVersion=` to ALL `VerInfo_Keys` nodes
 - `ProductVersion` is left unchanged (it often follows a different lifecycle)
@@ -261,6 +263,16 @@ on programmatic .dproj version changes.
   and `VerInfo_Build` elements in sync with the new version -- updating them
   where present and creating them where absent, in every `PropertyGroup` that
   carries a `FileVersion` key
+
+Choosing the maximum matters because IDE-generated projects keep a `1.0.0.0`
+placeholder in the Base `PropertyGroup` while the version builds actually
+consume lives in a more-derived config group. Reading the first key in
+document order would pick that placeholder and regress the effective version;
+taking the maximum guarantees a bump **never decreases** any `FileVersion`
+entry. Because the result is written to every key, all keys are unified to the
+baseline's width (a wider key is narrowed to match). When the keys disagree
+before the bump, an informational line lists the distinct values and the
+chosen baseline.
 
 A `.dproj` stores the file version twice, and two different consumers read
 different copies: builds read the `FileVersion` key, while the RAD Studio
