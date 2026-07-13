@@ -101,7 +101,7 @@ $ExitFileNotFound     = 3
 $ExitPatternNotFound  = 4
 $ExitIncrementFailed  = 5
 
-$script:ToolVersion = '1.3.0'
+$script:ToolVersion = '1.3.1'
 
 # -----------------------------------------------------------------------------
 # Version parsing and formatting
